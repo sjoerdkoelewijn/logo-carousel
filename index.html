@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Logo Tool — carousel composer</title>
+    <link rel="stylesheet" href="styles.css" />
+    <!-- Vendored potrace (global `Potrace`), no module, no CDN. -->
+    <script src="vendor/potrace/potrace.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-mark">◧</span>
+        <div class="brand-text">
+          <h1>Logo Carousel</h1>
+          <span class="brand-tag">composer</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="app">
+      <input id="file-input" type="file" multiple
+        accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden />
+
+      <!-- Start screen / hero (empty) -->
+      <section id="drop-zone" class="hero" aria-label="Upload logos">
+        <span class="hero-badge">Client-side · nothing gets uploaded</span>
+        <h1 class="hero-title">Convert any logo collection into a <span class="grad-text">clean carousel</span></h1>
+        <p class="hero-sub">Automatic monochrome vectorization with a transparent background.
+          Balance their relative sizes and export a clean SVG set for your website carousel.</p>
+        <div class="hero-drop">
+          <div class="hero-drop-icon">⬆</div>
+          <p class="hero-drop-title">Drop your logos here</p>
+          <p class="hero-drop-sub"><button type="button" id="browse-btn" class="link-btn">choose files</button> · paste with ⌘/Ctrl&nbsp;+&nbsp;V · multiple at once</p>
+          <p class="hero-formats">PNG · JPG · WEBP · SVG</p>
+        </div>
+        <ul class="hero-feats">
+          <li>Auto cutout &amp; mono</li>
+          <li>Balance sizes</li>
+          <li>Batch export as SVG</li>
+        </ul>
+      </section>
+
+      <div id="notice" class="notice" hidden></div>
+
+      <section id="workspace" class="workspace" hidden>
+        <!-- Global settings (apply to all logos) -->
+        <div class="controls">
+          <div class="control">
+            <label for="color-input">Color</label>
+            <div class="color-row">
+              <input id="color-input" type="color" value="#999999" />
+              <input id="color-hex" type="text" value="#999999" spellcheck="false" />
+            </div>
+          </div>
+          <div class="control">
+            <label for="smoothing">Smoothness <span id="smoothing-val" class="val">0.50</span></label>
+            <input id="smoothing" type="range" min="0" max="1" step="0.01" value="0.5" />
+          </div>
+          <div class="control">
+            <label>Export canvas</label>
+            <div class="seg" id="canvas-mode">
+              <button type="button" data-mode="landscape">Landscape</button>
+              <button type="button" data-mode="square">Square</button>
+              <button type="button" data-mode="custom">Custom</button>
+            </div>
+            <div class="size-row" id="size-row" hidden>
+              <input id="canvas-w" type="number" min="16" max="4000" value="800" />
+              <span>×</span>
+              <input id="canvas-h" type="number" min="16" max="4000" value="400" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Detail preview of the selected logo (zoomable) -->
+        <figure class="panel preview-panel">
+          <figcaption>Preview — <span id="detail-name">—</span></figcaption>
+          <div class="preview" id="preview-viewport">
+            <div id="svg-preview" class="svg-preview"></div>
+            <div class="zoom-toolbar">
+              <button type="button" id="zoom-out" title="Zoom out">−</button>
+              <span id="zoom-label">100%</span>
+              <button type="button" id="zoom-in" title="Zoom in">+</button>
+              <button type="button" id="zoom-reset" title="Fit">Fit</button>
+            </div>
+          </div>
+        </figure>
+
+        <!-- Carousel strip: all logos in their frame, each with a scale slider -->
+        <div class="carousel-wrap">
+          <div class="carousel-head">
+            <span class="carousel-title">Carousel preview</span>
+            <span class="carousel-hint">Click a logo to select · drag the slider to scale</span>
+            <div class="seg bg-toggle" id="bg-toggle">
+              <button type="button" data-bg="light">Light</button>
+              <button type="button" data-bg="dark">Dark</button>
+              <button type="button" data-bg="custom">Custom</button>
+              <input type="color" id="bg-color" value="#ffffff" hidden />
+            </div>
+          </div>
+          <div class="carousel-viewport">
+            <button type="button" class="carousel-nav prev" id="carousel-prev" aria-label="Scroll left" hidden>‹</button>
+            <div id="carousel" class="carousel bg-dark"></div>
+            <button type="button" class="carousel-nav next" id="carousel-next" aria-label="Scroll right" hidden>›</button>
+          </div>
+        </div>
+
+        <!-- Export -->
+        <div class="actions">
+          <button id="download-zip" class="btn btn-primary">Download all (ZIP)</button>
+          <button id="add-more-btn" class="btn">Add logos</button>
+          <button id="reset-btn" class="btn btn-ghost">Clear all</button>
+          <span id="status" class="status" aria-live="polite"></span>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>

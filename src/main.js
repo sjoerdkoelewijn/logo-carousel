@@ -115,6 +115,15 @@ function frameDims(logo) {
   return { W, H, f, targetH, bb };
 }
 
+// Startschaal voor een nieuw logo: logo's breder dan START_NORM_ASPECT beginnen
+// kleiner (breedte genormaliseerd), zodat brede logo's niet te groot starten.
+const START_NORM_ASPECT = 1.8;
+function autoInitialScale(logo) {
+  const bb = logo.bb;
+  const aspect = bb && bb.h ? bb.w / bb.h : 1;
+  return Math.max(0.2, Math.min(1, START_NORM_ASPECT / Math.max(1, aspect)));
+}
+
 // ---- input ----
 $("browse-btn").addEventListener("click", () => fileInput.click());
 $("add-more-btn").addEventListener("click", () => fileInput.click());
@@ -196,6 +205,11 @@ async function loadFiles(files) {
       addFrame(logo);
       setStatus(`Vectorizing ${k + 1}/${files.length}…`);
       await traceLogo(logo);
+      // Startschaal o.b.v. breedte: brede logo's starten kleiner zodat ze meteen
+      // gebalanceerd zijn (en je ruimte hebt om bij te stellen). Alleen bij toevoegen.
+      logo.scale = autoInitialScale(logo);
+      const sc = logo.el.querySelector(".frame-scale");
+      if (sc) sc.value = logo.scale;
       refreshFrame(logo);
       added = logo.id;
     } catch (err) {
@@ -344,7 +358,7 @@ function addFrame(logo) {
     <button class="frame-remove" title="Remove">×</button>
     <div class="frame-box">
       <div class="frame-svg"></div>
-      <div class="frame-scale-wrap"><input class="frame-scale" type="range" min="0.3" max="1" step="0.01" value="${logo.scale}" /></div>
+      <div class="frame-scale-wrap"><input class="frame-scale" type="range" min="0.2" max="1" step="0.01" value="${logo.scale}" /></div>
     </div>
     <div class="frame-name"></div>`;
   el.querySelector(".frame-name").textContent = logo.name;

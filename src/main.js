@@ -35,9 +35,6 @@ const carouselEl = $("carousel");
 const colorInput = $("color-input");
 const colorHex = $("color-hex");
 const smoothing = $("smoothing");
-const canvasModeEl = $("canvas-mode");
-const sizeRow = $("size-row");
-const canvasW = $("canvas-w");
 const canvasH = $("canvas-h");
 const bgColor = $("bg-color");
 
@@ -45,10 +42,7 @@ const bgColor = $("bg-color");
 let logos = []; // { id, name, src:ImageData, hasAlpha, svg, natW, natH, scale, el }
 let selectedId = null;
 let idSeq = 0;
-let canvasMode = "landscape"; // landscape | square | custom
 let carouselBg = "dark"; // light | dark | custom
-const LANDSCAPE = { W: 800, H: 400 };
-const SQUARE = { W: 500, H: 500 };
 
 // ---- settings ----
 function loadSettings() {
@@ -56,20 +50,16 @@ function loadSettings() {
     const s = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
     if (s.color) { colorInput.value = s.color; colorHex.value = s.color; }
     if (s.smoothing != null) smoothing.value = s.smoothing;
-    if (s.canvasW) canvasW.value = s.canvasW;
     if (s.canvasH) canvasH.value = s.canvasH;
-    if (s.canvasMode) canvasMode = s.canvasMode;
     if (s.bgColor) bgColor.value = s.bgColor;
     if (s.bg) carouselBg = s.bg;
   } catch {}
-  setCanvasMode(canvasMode);
   setCarouselBg(carouselBg);
   syncLabels();
 }
 function saveSettings() {
   localStorage.setItem(STORE_KEY, JSON.stringify({
-    color: colorHex.value, smoothing: smoothing.value,
-    canvasMode, canvasW: canvasW.value, canvasH: canvasH.value,
+    color: colorHex.value, smoothing: smoothing.value, canvasH: canvasH.value,
     bg: carouselBg, bgColor: bgColor.value,
   }));
 }
@@ -105,29 +95,24 @@ function syncLabels() {
 function setStatus(msg) { statusEl.textContent = msg || ""; }
 function showNotice(msg) { notice.textContent = msg || ""; notice.hidden = !msg; }
 
-function setCanvasMode(mode) {
-  canvasMode = mode;
-  sizeRow.hidden = mode !== "custom";
-  for (const b of canvasModeEl.querySelectorAll("button"))
-    b.classList.toggle("active", b.dataset.mode === mode);
-  updateAllFrameBoxes();
-  renderDetail();
-}
-function getCanvasSize() {
-  if (canvasMode === "landscape") return { ...LANDSCAPE };
-  if (canvasMode === "square") return { ...SQUARE };
-  const clampN = (v, d) => {
-    const n = Math.round(Number(v));
-    return Number.isFinite(n) ? Math.min(4000, Math.max(16, n)) : d;
-  };
-  return { W: clampN(canvasW.value, 800), H: clampN(canvasH.value, 400) };
+// Globale, gedeelde hoogte voor alle logo's.
+function getHeight() {
+  const n = Math.round(Number(canvasH.value));
+  return Number.isFinite(n) ? Math.min(4000, Math.max(40, n)) : 400;
 }
 
-// Frame per logo: hoogte is altijd globaal; breedte = hoogte als het logo op
-// "vierkant" staat, anders de globale breedte.
-function logoCanvasSize(logo) {
-  const { W, H } = getCanvasSize();
-  return { W: logo.square ? H : W, H };
+// Frame per logo: hoogte is altijd globaal; de breedte volgt de werkelijke logobreedte
+// (content-bbox) op de ingestelde schaal, met FRAME_PAD padding rondom. Zo neemt een
+// vierkant logo automatisch weinig horizontale ruimte, een breed logo veel — allemaal
+// op dezelfde hoogte.
+const FRAME_PAD = 10; // padding (in export-px) rond de content
+function frameDims(logo) {
+  const H = getHeight();
+  const bb = logo.bb || { x: 0, y: 0, w: logo.natW || 1, h: logo.natH || 1 };
+  const targetH = (H - 2 * FRAME_PAD) * logo.scale; // content-hoogte in export-px
+  const f = targetH / bb.h; // schaalfactor: content-units → export-px
+  const W = Math.max(2 * FRAME_PAD + 1, Math.round(bb.w * f + 2 * FRAME_PAD));
+  return { W, H, f, targetH, bb };
 }
 
 // ---- input ----
@@ -181,14 +166,7 @@ colorHex.addEventListener("change", () => {
 });
 smoothing.addEventListener("input", () => { syncLabels(); saveSettings(); scheduleReprocess(); });
 
-canvasModeEl.addEventListener("click", (e) => {
-  const btn = e.target.closest("button");
-  if (!btn) return;
-  setCanvasMode(btn.dataset.mode);
-  saveSettings();
-});
-[canvasW, canvasH].forEach((el) =>
-  el.addEventListener("input", () => { saveSettings(); updateAllFrameBoxes(); renderDetail(); }));
+canvasH.addEventListener("input", () => { saveSettings(); updateAllFrameBoxes(); renderDetail(); });
 
 let reprocessTimer;
 function scheduleReprocess() {
@@ -212,13 +190,13 @@ async function loadFiles(files) {
         name: files[k].name || `logo-${idSeq}`,
         src: imageData,
         hasAlpha: alpha,
-        svg: "", natW: 0, natH: 0, scale: 1, square: false, el: null,
+        svg: "", natW: 0, natH: 0, bb: null, scale: 1, el: null,
       };
       logos.push(logo);
       addFrame(logo);
       setStatus(`Vectorizing ${k + 1}/${files.length}…`);
       await traceLogo(logo);
-      renderFrame(logo);
+      refreshFrame(logo);
       added = logo.id;
     } catch (err) {
       console.error(err);
@@ -303,6 +281,24 @@ async function traceLogo(logo) {
   const m = svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
   logo.natW = m ? +m[1] : TRACE_TARGET;
   logo.natH = m ? +m[2] : TRACE_TARGET;
+  logo.bb = computeContentBBox(svg) || { x: 0, y: 0, w: logo.natW, h: logo.natH };
+}
+
+// Tight bounding box van de gevectoriseerde inhoud (negeert witruimte in de bron),
+// zodat de framebreedte de échte logobreedte volgt. Gebruikt getBBox off-screen.
+function computeContentBBox(svgString) {
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "position:absolute;left:-99999px;top:0;width:0;height:0;overflow:hidden";
+  wrap.innerHTML = svgString;
+  document.body.appendChild(wrap);
+  let bb = null;
+  try {
+    const path = wrap.querySelector("path");
+    const r = path.getBBox();
+    if (r.width > 0 && r.height > 0) bb = { x: r.x, y: r.y, w: r.width, h: r.height };
+  } catch {}
+  document.body.removeChild(wrap);
+  return bb;
 }
 
 async function reprocessAll() {
@@ -310,7 +306,7 @@ async function reprocessAll() {
   for (let i = 0; i < logos.length; i++) {
     setStatus(`Vectorizing ${i + 1}/${logos.length}…`);
     await traceLogo(logos[i]);
-    renderFrame(logos[i]);
+    refreshFrame(logos[i]);
     if (logos[i].id === selectedId) renderDetail();
   }
   setStatus("");
@@ -332,12 +328,12 @@ function svgDataUrl(svg) {
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
 
-// Frame-box maat op basis van de export-aspect (vaste hoogte, breedte volgt aspect).
+// Frame-box maat: vaste hoogte, breedte volgt de per-logo frame-aspect.
 function frameBoxSize(logo) {
-  const { W, H } = logoCanvasSize(logo);
+  const { W, H } = frameDims(logo);
   const boxH = 150;
   let boxW = Math.round((boxH * W) / H);
-  boxW = Math.min(340, Math.max(60, boxW));
+  boxW = Math.min(360, Math.max(40, boxW));
   return { boxW, boxH };
 }
 
@@ -346,36 +342,33 @@ function addFrame(logo) {
   el.className = "frame";
   el.dataset.id = logo.id;
   el.innerHTML = `
-    <button class="frame-square" title="Square frame (width = height)">1:1</button>
     <button class="frame-remove" title="Remove">×</button>
     <div class="frame-box">
       <img class="frame-img" alt=""/>
-      <div class="frame-scale-wrap"><input class="frame-scale" type="range" min="0.2" max="2" step="0.01" value="${logo.scale}" /></div>
+      <div class="frame-scale-wrap"><input class="frame-scale" type="range" min="0.3" max="1" step="0.01" value="${logo.scale}" /></div>
     </div>
     <div class="frame-name"></div>`;
   el.querySelector(".frame-name").textContent = logo.name;
   el.querySelector(".frame-remove").addEventListener("click", (e) => {
     e.stopPropagation(); removeLogo(logo.id);
   });
-  const sqBtn = el.querySelector(".frame-square");
-  sqBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    logo.square = !logo.square;
-    sqBtn.classList.toggle("active", logo.square);
-    applyFrameBox(logo);
-    if (logo.id === selectedId) renderDetail();
-    updateCarouselNav();
-  });
   const scaleInput = el.querySelector(".frame-scale");
   scaleInput.addEventListener("input", (e) => {
     e.stopPropagation();
     logo.scale = Number(scaleInput.value);
-    updateFrameImg(logo);
+    refreshFrame(logo); // schaal beïnvloedt ook de breedte → frame opnieuw
     if (logo.id === selectedId) renderDetail();
   });
   el.addEventListener("click", () => selectLogo(logo.id));
   carouselEl.appendChild(el);
   logo.el = el;
+  applyFrameBox(logo);
+  updateCarouselNav();
+}
+
+// Frame opnieuw renderen (beeld + box), bv. na schaal- of kleurwijziging.
+function refreshFrame(logo) {
+  renderFrame(logo);
   applyFrameBox(logo);
   updateCarouselNav();
 }
@@ -388,22 +381,16 @@ function applyFrameBox(logo) {
 }
 
 function updateAllFrameBoxes() {
-  for (const logo of logos) if (logo.el) applyFrameBox(logo);
+  for (const logo of logos) if (logo.el) { renderFrame(logo); applyFrameBox(logo); }
   updateCarouselNav();
 }
 
-// Zet de <img> (svg) en schaal binnen het frame.
-function updateFrameImg(logo) {
-  if (!logo.el) return;
-  const img = logo.el.querySelector(".frame-img");
-  img.style.transform = `scale(${logo.scale})`;
-}
-
+// Toon het GEFRAMEDE logo (content-tight, met padding) in het frame; de box heeft
+// dezelfde aspect, dus object-fit contain vult 'm precies. Geen extra transform nodig.
 function renderFrame(logo) {
   if (!logo.el || !logo.svg) return;
   const img = logo.el.querySelector(".frame-img");
-  img.src = svgDataUrl(logo.svg);
-  img.style.transform = `scale(${logo.scale})`;
+  img.src = svgDataUrl(framedSvg(logo));
 }
 
 function removeLogo(id) {
@@ -427,9 +414,9 @@ function selectLogo(id) {
   renderDetail();
 }
 
-// De detail-preview toont het geselecteerde logo IN het export-frame: de viewport
-// krijgt de canvas-aspect (landscape/vierkant/custom) en de gekozen achtergrond,
-// met het logo op zijn export-plek (contain-fit × schaal). Zoombaar voor kwaliteit.
+// De detail-preview toont het geselecteerde logo IN zijn export-frame: de viewport
+// krijgt de frame-aspect (breedte volgt de logobreedte) en de gekozen achtergrond.
+// Zoombaar voor kwaliteit.
 function bgCss() {
   return carouselBg === "dark" ? "#0e0e0e" : carouselBg === "custom" ? bgColor.value : "#f2f2f2";
 }
@@ -444,7 +431,7 @@ function sizeViewport(W, H) {
 function renderDetail() {
   const logo = logos.find((l) => l.id === selectedId);
   if (!logo || !logo.svg) { svgPreview.innerHTML = ""; detailName.textContent = "—"; return; }
-  const { W, H } = logoCanvasSize(logo);
+  const { W, H } = frameDims(logo);
   detailName.textContent = logo.name;
   viewport.style.background = bgCss();
   sizeViewport(W, H);
@@ -453,20 +440,15 @@ function renderDetail() {
 }
 
 // ---- export ----
-function placement(logo, W, H) {
-  const fit = Math.min(W / logo.natW, H / logo.natH);
-  const s = fit * logo.scale;
-  const pw = logo.natW * s, ph = logo.natH * s;
-  return { px: (W - pw) / 2, py: (H - ph) / 2, pw, ph };
-}
-
+// Bouw de frame-SVG: hoogte = globaal (H); breedte = content-breedte × schaal + padding.
+// De content wordt op zijn tight bbox geschaald en gecentreerd, met FRAME_PAD rondom.
 function framedSvg(logo) {
-  const { W, H } = logoCanvasSize(logo);
-  const { px, py, pw, ph } = placement(logo, W, H);
+  const { W, H, f, targetH, bb } = frameDims(logo);
+  const tx = FRAME_PAD - bb.x * f;
+  const ty = (H - targetH) / 2 - bb.y * f;
   const inner = logo.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
-    `<svg x="${px.toFixed(2)}" y="${py.toFixed(2)}" width="${pw.toFixed(2)}" height="${ph.toFixed(2)}" ` +
-    `viewBox="0 0 ${logo.natW} ${logo.natH}" preserveAspectRatio="xMidYMid meet">${inner}</svg></svg>`;
+    `<g transform="translate(${tx.toFixed(2)}, ${ty.toFixed(2)}) scale(${f.toFixed(5)})">${inner}</g></svg>`;
 }
 
 function safeName(name, i) {
@@ -476,7 +458,7 @@ function safeName(name, i) {
 
 $("download-zip").addEventListener("click", async () => {
   if (!logos.length) return;
-  const { H } = getCanvasSize();
+  const H = getHeight();
   setStatus("Creating ZIP…");
   try {
     const enc = new TextEncoder();

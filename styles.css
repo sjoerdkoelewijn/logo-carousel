@@ -349,6 +349,11 @@
     font-family: var(--mono);
     font-size: 0.8rem;
   }
+  .control-hint {
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
   input[type="range"] {
     -webkit-appearance: none;
     appearance: none;
@@ -604,10 +609,9 @@
     box-shadow: 0 0 0 2px var(--accent), 0 0 0 4px rgba(0, 0, 0, 0.35);
   }
   .frame-img {
-    max-width: 100%;
-    max-height: 100%;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
-    transform-origin: center;
     pointer-events: none;
   }
   /* Schaal-schuif ligt IN het geselecteerde frame (overlay onderin) */
@@ -658,35 +662,4 @@
   .frame:hover .frame-remove,
   .frame.selected .frame-remove { opacity: 1; }
   .frame-remove:hover { border-color: var(--accent); color: var(--accent); }
-
-  /* Vierkant-toggle per logo (linksboven) */
-  .frame-square {
-    position: absolute;
-    top: -8px;
-    left: -8px;
-    height: 20px;
-    padding: 0 6px;
-    border-radius: 999px;
-    background: var(--surface-2);
-    border: 1px solid var(--border-strong);
-    color: var(--text-dim);
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    line-height: 1;
-    z-index: 2;
-    display: grid;
-    place-items: center;
-    opacity: 0;
-    transition: opacity 0.1s, color 0.15s, border-color 0.15s, background 0.15s;
-  }
-  .frame:hover .frame-square,
-  .frame.selected .frame-square { opacity: 1; }
-  .frame-square:hover { border-color: var(--accent); color: var(--text); }
-  .frame-square.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: var(--accent-contrast);
-    opacity: 1;
-  }
 }

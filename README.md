@@ -25,13 +25,13 @@ Accepteert PNG · JPG · WEBP · SVG.
   achtergrond-toggle **Licht / Donker / Custom** (kleurkiezer; start op licht) om ze tegen de
   bedoelde site-bg te checken. Klik een logo om het te selecteren — de **schaal-schuif** ligt
   dan ín het frame; het logo verschijnt ook groot in de detail-preview.
-- **Export-canvas**: **Landscape** (800×400), **Vierkant** (500×500) of **Custom** (eigen
-  breedte×hoogte; velden verschijnen alleen bij Custom). De frame-aspect volgt de keuze.
-- **Per-logo `1:1`-knop**: zet één logo's frame op vierkant (breedte = de globale hoogte),
-  zodat vierkante logo's niet te veel horizontale ruimte innemen. De **hoogte blijft altijd
-  globaal**; alleen de breedte verschilt per logo — zoals een echte logo-band.
-- **Download alles (ZIP)**: één **SVG** per logo — een frame op de gekozen canvasgrootte met de
-  vector *contain*-gefit × de per-logo schaal, gecentreerd (transparante achtergrond).
+- **Hoogte** (globaal): één gedeelde hoogte voor álle logo's. De **breedte volgt per logo
+  automatisch de werkelijke logobreedte** — de tight content-bounding-box van de vector +
+  10px padding rondom. Zo neemt een vierkant logo weinig horizontale ruimte, een breed logo
+  veel, en witruimte in het bronbestand telt niet mee. De **schaal-schuif** per logo regelt de
+  grootte (en dus ook de breedte).
+- **Download alles (ZIP)**: één **SVG** per logo — allemaal dezelfde hoogte, breedte per logo,
+  vector gecentreerd met padding op transparante achtergrond.
 
 ## Pipeline
 
@@ -60,10 +60,10 @@ wordt daaruit afgeleid.
 6. **Preview & carrousel** — het geselecteerde logo groot met **pan & zoom** (scrollen = zoomen
    naar de cursor, slepen = pannen, −/Fit/+ knopjes, dubbelklik = passend). Daaronder de
    carrousel-strip met elk logo in zijn export-frame + per-logo schaal-schuif.
-7. **Export** — één gedeelde canvasgrootte (Landscape / Vierkant / Custom). Per logo wordt de
-   vector *contain*-gefit in het frame × de per-logo schaal, gecentreerd. **Download alles (ZIP)**
-   levert per logo een **SVG** (frame met geneste vector, transparante achtergrond). Kleur
-   wisselen vervangt alleen de fill — geen re-trace.
+7. **Export** — gedeelde **hoogte** (globaal); de **breedte per logo** volgt de tight content-
+   bounding-box × schaal + 10px padding, verticaal gecentreerd. **Download alles (ZIP)** levert
+   per logo een **SVG** (allemaal dezelfde hoogte, breedte per logo, transparante achtergrond).
+   Kleur wisselen vervangt alleen de fill — geen re-trace.
 
 Al-transparante PNG's slaan de cutout over; SVG's rasteriseren eerst.
 

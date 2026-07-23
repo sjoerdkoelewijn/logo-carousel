@@ -59,17 +59,9 @@
             <input id="smoothing" type="range" min="0" max="1" step="0.01" value="0.5" />
           </div>
           <div class="control">
-            <label>Export canvas</label>
-            <div class="seg" id="canvas-mode">
-              <button type="button" data-mode="landscape">Landscape</button>
-              <button type="button" data-mode="square">Square</button>
-              <button type="button" data-mode="custom">Custom</button>
-            </div>
-            <div class="size-row" id="size-row" hidden>
-              <input id="canvas-w" type="number" min="16" max="4000" value="800" />
-              <span>×</span>
-              <input id="canvas-h" type="number" min="16" max="4000" value="400" />
-            </div>
+            <label for="canvas-h">Height (px)</label>
+            <input id="canvas-h" type="number" min="40" max="4000" value="400" />
+            <span class="control-hint">Shared height for all logos · width follows each logo</span>
           </div>
         </div>
 

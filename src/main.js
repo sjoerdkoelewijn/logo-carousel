@@ -124,6 +124,28 @@ function autoInitialScale(logo) {
   return Math.max(0.2, Math.min(1, START_NORM_ASPECT / Math.max(1, aspect)));
 }
 
+// Maximale schaal zodat het logo binnen het (begrensde) carrousel-frame past — brede
+// logo's kun je zo niet groter maken dan hun frame. Smalle logo's houden gewoon max 1.
+function maxScaleFor(logo) {
+  const bb = logo.bb;
+  if (!bb || !bb.h) return 1;
+  const bandH = getHeight() - 2 * FRAME_PAD;
+  const contentW1 = (bb.w / bb.h) * bandH; // volle contentbreedte (schaal 1)
+  const { SW } = thumbGeom(logo); // frame-breedte in H-eenheden (schaal-onafhankelijk)
+  return Math.max(0.2, Math.min(1, (SW - 2 * FRAME_PAD) / contentW1));
+}
+
+// Zet de schuif-max en clamp de schaal zodat het logo binnen het frame blijft.
+function applyScaleLimit(logo) {
+  const maxS = maxScaleFor(logo);
+  const sc = logo.el?.querySelector(".frame-scale");
+  if (sc) sc.max = maxS.toFixed(3);
+  if (logo.scale > maxS) {
+    logo.scale = maxS;
+    if (sc) sc.value = maxS;
+  }
+}
+
 // ---- input ----
 $("browse-btn").addEventListener("click", () => fileInput.click());
 $("add-more-btn").addEventListener("click", () => fileInput.click());
@@ -210,6 +232,7 @@ async function loadFiles(files) {
       logo.scale = autoInitialScale(logo);
       const sc = logo.el.querySelector(".frame-scale");
       if (sc) sc.value = logo.scale;
+      applyScaleLimit(logo); // schuif-max per logo (past binnen het frame)
       refreshFrame(logo);
       added = logo.id;
     } catch (err) {
@@ -393,7 +416,7 @@ function applyFrameBox(logo) {
 }
 
 function updateAllFrameBoxes() {
-  for (const logo of logos) if (logo.el) { renderFrame(logo); applyFrameBox(logo); }
+  for (const logo of logos) if (logo.el) { applyScaleLimit(logo); renderFrame(logo); applyFrameBox(logo); }
   updateCarouselNav();
 }
 

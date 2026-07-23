@@ -356,8 +356,8 @@ function addFrame(logo) {
   scaleInput.addEventListener("input", (e) => {
     e.stopPropagation();
     logo.scale = Number(scaleInput.value);
-    refreshFrame(logo); // schaal beïnvloedt ook de breedte → frame opnieuw
-    if (logo.id === selectedId) renderDetail();
+    refreshFrame(logo); // kleine thumbnail werkt direct bij (goedkoop)
+    if (logo.id === selectedId) scheduleDetail(); // grote preview: gedebounced + smooth
   });
   el.addEventListener("click", () => selectLogo(logo.id));
   carouselEl.appendChild(el);
@@ -420,23 +420,66 @@ function selectLogo(id) {
 function bgCss() {
   return carouselBg === "dark" ? "#0e0e0e" : carouselBg === "custom" ? bgColor.value : "#f2f2f2";
 }
-function sizeViewport(W, H) {
+// Vast "podium" met een vaste verhouding: de viewport-grootte hangt NIET van het logo
+// af. Binnen dit podium staat de logo-content gecentreerd, met ruimte eromheen — die
+// ruimte is puur preview en zit NIET in de export. De contenthoogte is proportioneel
+// aan de schaal, dus bij het schuiven zie je het logo echt kleiner/groter worden.
+const PREVIEW_ASPECT = 2.6; // vaste breedte:hoogte van het podium
+
+// Geometrie van het podium + de plek van de content erin.
+function previewGeom(logo) {
+  const H = getHeight();
+  const bb = logo.bb || { x: 0, y: 0, w: logo.natW || 1, h: logo.natH || 1 };
+  const SH = Math.round(H * 1.5); // podiumhoogte (vaste marge boven/onder de band)
+  const SW = Math.round(SH * PREVIEW_ASPECT);
+  let f = ((H - 2 * FRAME_PAD) * logo.scale) / bb.h; // hoogte-proportioneel aan schaal
+  const maxW = SW * 0.92;
+  if (bb.w * f > maxW) f = maxW / bb.w; // heel brede logo's binnen het podium houden
+  const contentW = bb.w * f, contentH = bb.h * f;
+  const tx = SW / 2 - contentW / 2 - bb.x * f;
+  const ty = SH / 2 - contentH / 2 - bb.y * f;
+  return { SW, SH, tx, ty, f };
+}
+function previewTransform(logo) {
+  const { tx, ty, f } = previewGeom(logo);
+  return `translate(${tx.toFixed(2)}, ${ty.toFixed(2)}) scale(${f.toFixed(5)})`;
+}
+function previewSvg(logo) {
+  const { SW, SH } = previewGeom(logo);
+  const inner = logo.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${SW}" height="${SH}" viewBox="0 0 ${SW} ${SH}">` +
+    `<g class="pc" transform="${previewTransform(logo)}">${inner}</g></svg>`;
+}
+
+function sizeViewport() {
   const availW = viewport.parentElement?.clientWidth || 800;
-  const maxH = Math.round(window.innerHeight * 0.56);
-  let w = availW, h = Math.round((w * H) / W);
-  if (h > maxH) { h = maxH; w = Math.round((h * W) / H); }
+  const maxH = Math.min(460, Math.round(window.innerHeight * 0.5));
+  let w = availW, h = Math.round(w / PREVIEW_ASPECT);
+  if (h > maxH) { h = maxH; w = Math.round(h * PREVIEW_ASPECT); }
   viewport.style.width = w + "px";
   viewport.style.height = h + "px";
 }
 function renderDetail() {
   const logo = logos.find((l) => l.id === selectedId);
   if (!logo || !logo.svg) { svgPreview.innerHTML = ""; detailName.textContent = "—"; return; }
-  const { W, H } = frameDims(logo);
   detailName.textContent = logo.name;
   viewport.style.background = bgCss();
-  sizeViewport(W, H);
-  svgPreview.innerHTML = framedSvg(logo);
+  sizeViewport();
+  svgPreview.innerHTML = previewSvg(logo);
   fitView();
+}
+
+// Alleen de content-schaal binnen het (vaste) podium bijwerken — de <g> heeft een CSS
+// transitie, dus dit animeert vloeiend. Gedebounced zodat het niet op elke stap gebeurt.
+let detailTimer;
+function scheduleDetail() {
+  clearTimeout(detailTimer);
+  detailTimer = setTimeout(() => {
+    const logo = logos.find((l) => l.id === selectedId);
+    const g = svgPreview.querySelector(".pc");
+    if (logo && g) g.setAttribute("transform", previewTransform(logo));
+    else renderDetail();
+  }, 550);
 }
 
 // ---- export ----

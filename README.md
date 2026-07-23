@@ -57,9 +57,10 @@ wordt daaruit afgeleid.
 5. **Preview** — de SVG groot op checkerboard, met **pan & zoom** (scrollen = zoomen naar de
    cursor, slepen = pannen, −/Fit/+ knopjes, dubbelklik = passend). Zoom blijft behouden bij
    het aanpassen van Gladheid/kleur, zodat je op hetzelfde niveau kunt vergelijken.
-6. **Preview & carrousel** — het geselecteerde logo groot met **pan & zoom** (scrollen = zoomen
-   naar de cursor, slepen = pannen, −/Fit/+ knopjes, dubbelklik = passend). Daaronder de
-   carrousel-strip met elk logo in zijn export-frame + per-logo schaal-schuif.
+6. **Preview & carrousel** — het geselecteerde logo op een **vast podium** (vaste verhouding,
+   met ruimte eromheen zodat schalen zichtbaar is; die ruimte zit níét in de export) met
+   **pan & zoom**. De schaal-schuif werkt gedebounced + met een vloeiende transitie. Daaronder
+   de carrousel-strip (royale tussenruimte, alleen preview) met per-logo schaal-schuif.
 7. **Export** — gedeelde **hoogte** (globaal); de **breedte per logo** volgt de tight content-
    bounding-box × schaal + 10px padding, verticaal gecentreerd. **Download alles (ZIP)** levert
    per logo een **SVG** (allemaal dezelfde hoogte, breedte per logo, transparante achtergrond).

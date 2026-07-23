@@ -328,13 +328,13 @@ function svgDataUrl(svg) {
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
 
-// Frame-box maat: vaste hoogte, breedte volgt de per-logo frame-aspect.
+// Frame-box maat: vaste hoogte; breedte volgt de vaste slot-aspect van dit logo
+// (gebaseerd op z'n volle breedte, dus schaal-onafhankelijk → verspringt niet).
 function frameBoxSize(logo) {
-  const { W, H } = frameDims(logo);
-  const boxH = 150;
-  let boxW = Math.round((boxH * W) / H);
-  boxW = Math.min(360, Math.max(40, boxW));
-  return { boxW, boxH };
+  const { SW, SH } = thumbGeom(logo);
+  const boxH = 132;
+  const aspect = Math.min(THUMB_MAX_ASPECT, Math.max(0.7, SW / SH));
+  return { boxW: Math.round(boxH * aspect), boxH };
 }
 
 function addFrame(logo) {
@@ -344,7 +344,7 @@ function addFrame(logo) {
   el.innerHTML = `
     <button class="frame-remove" title="Remove">×</button>
     <div class="frame-box">
-      <img class="frame-img" alt=""/>
+      <div class="frame-svg"></div>
       <div class="frame-scale-wrap"><input class="frame-scale" type="range" min="0.3" max="1" step="0.01" value="${logo.scale}" /></div>
     </div>
     <div class="frame-name"></div>`;
@@ -356,8 +356,8 @@ function addFrame(logo) {
   scaleInput.addEventListener("input", (e) => {
     e.stopPropagation();
     logo.scale = Number(scaleInput.value);
-    refreshFrame(logo); // kleine thumbnail werkt direct bij (goedkoop)
-    if (logo.id === selectedId) scheduleDetail(); // grote preview: gedebounced + smooth
+    scheduleThumbScale(logo); // slot vast; content schaalt binnenin (smooth, korte delay)
+    if (logo.id === selectedId) scheduleDetail(); // grote preview: iets langere delay
   });
   el.addEventListener("click", () => selectLogo(logo.id));
   carouselEl.appendChild(el);
@@ -366,7 +366,7 @@ function addFrame(logo) {
   updateCarouselNav();
 }
 
-// Frame opnieuw renderen (beeld + box), bv. na schaal- of kleurwijziging.
+// Frame opnieuw renderen (SVG + box), bv. na kleur-/trace-/hoogtewijziging.
 function refreshFrame(logo) {
   renderFrame(logo);
   applyFrameBox(logo);
@@ -385,12 +385,24 @@ function updateAllFrameBoxes() {
   updateCarouselNav();
 }
 
-// Toon het GEFRAMEDE logo (content-tight, met padding) in het frame; de box heeft
-// dezelfde aspect, dus object-fit contain vult 'm precies. Geen extra transform nodig.
+// Toon het logo op een VAST slot (inline SVG-podium): het slot heeft altijd dezelfde
+// maat, alleen de content erbinnen schaalt mee — zo is het schalen ook voor brede
+// logo's zichtbaar. Puur preview; de export blijft content-strak.
 function renderFrame(logo) {
   if (!logo.el || !logo.svg) return;
-  const img = logo.el.querySelector(".frame-img");
-  img.src = svgDataUrl(framedSvg(logo));
+  logo.el.querySelector(".frame-svg").innerHTML = thumbSvg(logo);
+}
+
+// Alleen de content-schaal binnen het (vaste) slot bijwerken → animeert vloeiend
+// via de CSS-transitie op .pc. Korte delay zodat het snappy voelt maar niet schokt.
+let thumbTimer;
+function scheduleThumbScale(logo) {
+  clearTimeout(thumbTimer);
+  thumbTimer = setTimeout(() => {
+    const g = logo.el?.querySelector(".frame-svg .pc");
+    if (g) g.setAttribute("transform", thumbTransform(logo));
+    else renderFrame(logo);
+  }, 120);
 }
 
 function removeLogo(id) {
@@ -424,32 +436,59 @@ function bgCss() {
 // af. Binnen dit podium staat de logo-content gecentreerd, met ruimte eromheen — die
 // ruimte is puur preview en zit NIET in de export. De contenthoogte is proportioneel
 // aan de schaal, dus bij het schuiven zie je het logo echt kleiner/groter worden.
-const PREVIEW_ASPECT = 2.6; // vaste breedte:hoogte van het podium
+const PREVIEW_ASPECT = 2.6, PREVIEW_MF = 1.5; // groot podium (vaste verhouding)
 
-// Geometrie van het podium + de plek van de content erin.
-function previewGeom(logo) {
+// GROOT PODIUM: vaste verhouding; content gecentreerd op schaal-proportionele grootte.
+function stageGeom(logo, aspect, mf) {
   const H = getHeight();
   const bb = logo.bb || { x: 0, y: 0, w: logo.natW || 1, h: logo.natH || 1 };
-  const SH = Math.round(H * 1.5); // podiumhoogte (vaste marge boven/onder de band)
-  const SW = Math.round(SH * PREVIEW_ASPECT);
-  let f = ((H - 2 * FRAME_PAD) * logo.scale) / bb.h; // hoogte-proportioneel aan schaal
-  const maxW = SW * 0.92;
-  if (bb.w * f > maxW) f = maxW / bb.w; // heel brede logo's binnen het podium houden
-  const contentW = bb.w * f, contentH = bb.h * f;
-  const tx = SW / 2 - contentW / 2 - bb.x * f;
-  const ty = SH / 2 - contentH / 2 - bb.y * f;
-  return { SW, SH, tx, ty, f };
+  const SH = Math.round(H * mf);
+  const SW = Math.round(SH * aspect);
+  let f = ((H - 2 * FRAME_PAD) * logo.scale) / bb.h;
+  const maxW = SW * 0.9, maxH = SH * 0.9;
+  if (bb.w * f > maxW) f = maxW / bb.w;
+  if (bb.h * f > maxH) f = maxH / bb.h;
+  const cw = bb.w * f, ch = bb.h * f;
+  return { SW, SH, tx: SW / 2 - cw / 2 - bb.x * f, ty: SH / 2 - ch / 2 - bb.y * f, f };
 }
-function previewTransform(logo) {
-  const { tx, ty, f } = previewGeom(logo);
-  return `translate(${tx.toFixed(2)}, ${ty.toFixed(2)}) scale(${f.toFixed(5)})`;
-}
-function previewSvg(logo) {
-  const { SW, SH } = previewGeom(logo);
+const previewTransform = (logo) => {
+  const g = stageGeom(logo, PREVIEW_ASPECT, PREVIEW_MF);
+  return `translate(${g.tx.toFixed(2)}, ${g.ty.toFixed(2)}) scale(${g.f.toFixed(5)})`;
+};
+const previewSvg = (logo) => {
+  const { SW, SH } = stageGeom(logo, PREVIEW_ASPECT, PREVIEW_MF);
   const inner = logo.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${SW}" height="${SH}" viewBox="0 0 ${SW} ${SH}">` +
     `<g class="pc" transform="${previewTransform(logo)}">${inner}</g></svg>`;
+};
+
+// CARROUSEL-SLOT: breedte per logo VAST op basis van z'n volle breedte (schaal 1), zodat
+// het slot niet verspringt tijdens het schuiven maar de content erbinnen wél schaalt —
+// ook zichtbaar voor brede logo's. Puur preview; niet in de export.
+const THUMB_MAX_ASPECT = 3.4; // extreem brede logo's letterboxen we
+function thumbGeom(logo) {
+  const H = getHeight();
+  const bb = logo.bb || { x: 0, y: 0, w: logo.natW || 1, h: logo.natH || 1 };
+  const bandH = H - 2 * FRAME_PAD;
+  const contentW1 = (bb.w / bb.h) * bandH; // volle contentbreedte bij schaal 1
+  const m = bandH * 0.16; // marge rondom
+  const SW = Math.round(contentW1 + 2 * m);
+  const SH = Math.round(bandH + 2 * m);
+  const contentH = bandH * logo.scale; // huidige schaal → content krimpt binnen het slot
+  const f = contentH / bb.h;
+  const cw = bb.w * f, ch = bb.h * f;
+  return { SW, SH, tx: SW / 2 - cw / 2 - bb.x * f, ty: SH / 2 - ch / 2 - bb.y * f, f };
 }
+const thumbTransform = (logo) => {
+  const g = thumbGeom(logo);
+  return `translate(${g.tx.toFixed(2)}, ${g.ty.toFixed(2)}) scale(${g.f.toFixed(5)})`;
+};
+const thumbSvg = (logo) => {
+  const { SW, SH } = thumbGeom(logo);
+  const inner = logo.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${SW}" height="${SH}" viewBox="0 0 ${SW} ${SH}" preserveAspectRatio="xMidYMid meet">` +
+    `<g class="pc" transform="${thumbTransform(logo)}">${inner}</g></svg>`;
+};
 
 function sizeViewport() {
   const availW = viewport.parentElement?.clientWidth || 800;
@@ -479,7 +518,7 @@ function scheduleDetail() {
     const g = svgPreview.querySelector(".pc");
     if (logo && g) g.setAttribute("transform", previewTransform(logo));
     else renderDetail();
-  }, 550);
+  }, 350);
 }
 
 // ---- export ----

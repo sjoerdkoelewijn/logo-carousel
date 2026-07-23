@@ -610,7 +610,6 @@
     justify-content: center;
     overflow: hidden;
     border-radius: 2px;
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .frame.selected .frame-box {
     box-shadow: 0 0 0 2px var(--accent), 0 0 0 4px rgba(0, 0, 0, 0.35);

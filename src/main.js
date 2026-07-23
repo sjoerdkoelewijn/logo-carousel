@@ -345,9 +345,8 @@ function svgDataUrl(svg) {
 // Frame-box maat: vaste hoogte; breedte volgt de vaste slot-aspect van dit logo
 // (gebaseerd op z'n volle breedte, dus schaal-onafhankelijk → verspringt niet).
 function frameBoxSize(logo) {
-  const { W, H } = frameDims(logo); // = de export-afmetingen (strak om huidige schaal)
-  const boxH = 132;
-  return { boxW: Math.round(boxH * (W / H)), boxH };
+  const { boxW, boxH } = thumbGeom(logo); // vast per logo (schaal-onafhankelijk)
+  return { boxW, boxH };
 }
 
 function addFrame(logo) {
@@ -406,15 +405,15 @@ function renderFrame(logo) {
   logo.el.querySelector(".frame-svg").innerHTML = thumbSvg(logo);
 }
 
-// Thumbnail bijwerken: het frame krimpt/groeit mee met de geschaalde logobreedte.
-// De box-breedte animeert vloeiend via de CSS-transitie. Korte delay tegen geschok.
+// Thumbnail bijwerken: alleen de content-schaal binnen het VASTE frame (geen box-resize,
+// dus niets verspringt). De <g> heeft een CSS-transitie → vloeiend. Korte delay.
 let thumbTimer;
 function scheduleThumbScale(logo) {
   clearTimeout(thumbTimer);
   thumbTimer = setTimeout(() => {
-    renderFrame(logo);
-    applyFrameBox(logo);
-    updateCarouselNav();
+    const g = logo.el?.querySelector(".frame-svg .pc");
+    if (g) g.setAttribute("transform", thumbTransform(logo));
+    else renderFrame(logo);
   }, 120);
 }
 
@@ -475,11 +474,40 @@ const previewSvg = (logo) => {
     `<g class="pc" transform="${previewTransform(logo)}">${inner}</g></svg>`;
 };
 
-// CARROUSEL-THUMBNAIL = de export (framedSvg): strak om het huidige (geschaalde) logo.
-// Zo krimpt óók het frame mee als je een logo kleiner schaalt → smalle frames, andere
-// logo's blijven zichtbaar. De breedte-verandering animeert vloeiend (CSS-transitie op
-// de box-breedte). Volledig WYSIWYG met de export.
-const thumbSvg = (logo) => framedSvg(logo);
+// CARROUSEL-THUMBNAIL: VAST frame per logo (verspringt niet bij het schuiven), met een
+// begrensde breedte (THUMB_MAX_BOXW) zodat brede logo's niet de hele strip innemen. De
+// content schaalt binnen dat vaste frame; de hoogte is WYSIWYG met de export. Wordt een
+// logo groter geschaald dan het frame breed is, dan clipt het frame (zeldzaam; de export
+// zelf clipt nooit).
+const THUMB_BOX_H = 132;
+const THUMB_MAX_BOXW = 380;
+function thumbGeom(logo) {
+  const H = getHeight();
+  const bb = logo.bb || { x: 0, y: 0, w: logo.natW || 1, h: logo.natH || 1 };
+  const bandH = H - 2 * FRAME_PAD;
+  // Vaste box-breedte o.b.v. de volle (schaal-1) breedte, begrensd. Schaal-onafhankelijk.
+  const fullW = ((bb.w / bb.h) * bandH + 2 * FRAME_PAD) * (THUMB_BOX_H / H);
+  const boxW = Math.min(THUMB_MAX_BOXW, Math.round(fullW));
+  const boxH = THUMB_BOX_H;
+  // viewBox in H-eenheden, aspect = box-aspect (geen vervorming). Hoogte = H (WYSIWYG).
+  const SH = H;
+  const SW = Math.round((boxW / boxH) * SH);
+  // Content op de HUIDIGE schaal, gecentreerd (clip als breder dan SW).
+  const contentH = bandH * logo.scale;
+  const f = contentH / bb.h;
+  const cw = bb.w * f, ch = bb.h * f;
+  return { SW, SH, boxW, boxH, tx: SW / 2 - cw / 2 - bb.x * f, ty: SH / 2 - ch / 2 - bb.y * f, f };
+}
+const thumbTransform = (logo) => {
+  const g = thumbGeom(logo);
+  return `translate(${g.tx.toFixed(2)}, ${g.ty.toFixed(2)}) scale(${g.f.toFixed(5)})`;
+};
+const thumbSvg = (logo) => {
+  const { SW, SH } = thumbGeom(logo);
+  const inner = logo.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${SW}" height="${SH}" viewBox="0 0 ${SW} ${SH}">` +
+    `<g class="pc" transform="${thumbTransform(logo)}">${inner}</g></svg>`;
+};
 
 function sizeViewport() {
   const availW = viewport.parentElement?.clientWidth || 800;
@@ -520,8 +548,8 @@ function framedSvg(logo) {
   const tx = FRAME_PAD - bb.x * f;
   const ty = (H - targetH) / 2 - bb.y * f;
   const inner = logo.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">` +
-    `<g class="pc" transform="translate(${tx.toFixed(2)}, ${ty.toFixed(2)}) scale(${f.toFixed(5)})">${inner}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
+    `<g transform="translate(${tx.toFixed(2)}, ${ty.toFixed(2)}) scale(${f.toFixed(5)})">${inner}</g></svg>`;
 }
 
 function safeName(name, i) {

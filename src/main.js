@@ -123,6 +123,13 @@ function getCanvasSize() {
   return { W: clampN(canvasW.value, 800), H: clampN(canvasH.value, 400) };
 }
 
+// Frame per logo: hoogte is altijd globaal; breedte = hoogte als het logo op
+// "vierkant" staat, anders de globale breedte.
+function logoCanvasSize(logo) {
+  const { W, H } = getCanvasSize();
+  return { W: logo.square ? H : W, H };
+}
+
 // ---- input ----
 $("browse-btn").addEventListener("click", () => fileInput.click());
 $("add-more-btn").addEventListener("click", () => fileInput.click());
@@ -205,7 +212,7 @@ async function loadFiles(files) {
         name: files[k].name || `logo-${idSeq}`,
         src: imageData,
         hasAlpha: alpha,
-        svg: "", natW: 0, natH: 0, scale: 1, el: null,
+        svg: "", natW: 0, natH: 0, scale: 1, square: false, el: null,
       };
       logos.push(logo);
       addFrame(logo);
@@ -326,11 +333,11 @@ function svgDataUrl(svg) {
 }
 
 // Frame-box maat op basis van de export-aspect (vaste hoogte, breedte volgt aspect).
-function frameBoxSize() {
-  const { W, H } = getCanvasSize();
+function frameBoxSize(logo) {
+  const { W, H } = logoCanvasSize(logo);
   const boxH = 150;
   let boxW = Math.round((boxH * W) / H);
-  boxW = Math.min(320, Math.max(60, boxW));
+  boxW = Math.min(340, Math.max(60, boxW));
   return { boxW, boxH };
 }
 
@@ -339,6 +346,7 @@ function addFrame(logo) {
   el.className = "frame";
   el.dataset.id = logo.id;
   el.innerHTML = `
+    <button class="frame-square" title="Square frame (width = height)">1:1</button>
     <button class="frame-remove" title="Remove">×</button>
     <div class="frame-box">
       <img class="frame-img" alt=""/>
@@ -348,6 +356,15 @@ function addFrame(logo) {
   el.querySelector(".frame-name").textContent = logo.name;
   el.querySelector(".frame-remove").addEventListener("click", (e) => {
     e.stopPropagation(); removeLogo(logo.id);
+  });
+  const sqBtn = el.querySelector(".frame-square");
+  sqBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    logo.square = !logo.square;
+    sqBtn.classList.toggle("active", logo.square);
+    applyFrameBox(logo);
+    if (logo.id === selectedId) renderDetail();
+    updateCarouselNav();
   });
   const scaleInput = el.querySelector(".frame-scale");
   scaleInput.addEventListener("input", (e) => {
@@ -364,7 +381,7 @@ function addFrame(logo) {
 }
 
 function applyFrameBox(logo) {
-  const { boxW, boxH } = frameBoxSize();
+  const { boxW, boxH } = frameBoxSize(logo);
   const box = logo.el.querySelector(".frame-box");
   box.style.width = boxW + "px";
   box.style.height = boxH + "px";
@@ -427,11 +444,11 @@ function sizeViewport(W, H) {
 function renderDetail() {
   const logo = logos.find((l) => l.id === selectedId);
   if (!logo || !logo.svg) { svgPreview.innerHTML = ""; detailName.textContent = "—"; return; }
-  const { W, H } = getCanvasSize();
+  const { W, H } = logoCanvasSize(logo);
   detailName.textContent = logo.name;
   viewport.style.background = bgCss();
   sizeViewport(W, H);
-  svgPreview.innerHTML = framedSvg(logo, W, H);
+  svgPreview.innerHTML = framedSvg(logo);
   fitView();
 }
 
@@ -443,7 +460,8 @@ function placement(logo, W, H) {
   return { px: (W - pw) / 2, py: (H - ph) / 2, pw, ph };
 }
 
-function framedSvg(logo, W, H) {
+function framedSvg(logo) {
+  const { W, H } = logoCanvasSize(logo);
   const { px, py, pw, ph } = placement(logo, W, H);
   const inner = logo.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
@@ -458,15 +476,15 @@ function safeName(name, i) {
 
 $("download-zip").addEventListener("click", async () => {
   if (!logos.length) return;
-  const { W, H } = getCanvasSize();
+  const { H } = getCanvasSize();
   setStatus("Creating ZIP…");
   try {
     const enc = new TextEncoder();
     const entries = logos.map((logo, i) => ({
       name: safeName(logo.name, i) + ".svg",
-      data: enc.encode(framedSvg(logo, W, H)),
+      data: enc.encode(framedSvg(logo)),
     }));
-    downloadBlob(makeZip(entries), `logos-${W}x${H}.zip`);
+    downloadBlob(makeZip(entries), `logos-h${H}.zip`);
     setStatus("");
   } catch (err) {
     console.error(err);

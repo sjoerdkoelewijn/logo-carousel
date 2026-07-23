@@ -27,6 +27,9 @@ Accepteert PNG · JPG · WEBP · SVG.
   dan ín het frame; het logo verschijnt ook groot in de detail-preview.
 - **Export-canvas**: **Landscape** (800×400), **Vierkant** (500×500) of **Custom** (eigen
   breedte×hoogte; velden verschijnen alleen bij Custom). De frame-aspect volgt de keuze.
+- **Per-logo `1:1`-knop**: zet één logo's frame op vierkant (breedte = de globale hoogte),
+  zodat vierkante logo's niet te veel horizontale ruimte innemen. De **hoogte blijft altijd
+  globaal**; alleen de breedte verschilt per logo — zoals een echte logo-band.
 - **Download alles (ZIP)**: één **SVG** per logo — een frame op de gekozen canvasgrootte met de
   vector *contain*-gefit × de per-logo schaal, gecentreerd (transparante achtergrond).
 

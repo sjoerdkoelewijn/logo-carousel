@@ -345,9 +345,9 @@ function svgDataUrl(svg) {
 // Frame-box maat: vaste hoogte; breedte volgt de vaste slot-aspect van dit logo
 // (gebaseerd op z'n volle breedte, dus schaal-onafhankelijk → verspringt niet).
 function frameBoxSize(logo) {
-  const { SW, SH } = thumbGeom(logo);
+  const { W, H } = frameDims(logo); // = de export-afmetingen (strak om huidige schaal)
   const boxH = 132;
-  return { boxW: Math.round(boxH * (SW / SH)), boxH };
+  return { boxW: Math.round(boxH * (W / H)), boxH };
 }
 
 function addFrame(logo) {
@@ -406,15 +406,15 @@ function renderFrame(logo) {
   logo.el.querySelector(".frame-svg").innerHTML = thumbSvg(logo);
 }
 
-// Alleen de content-schaal binnen het (vaste) slot bijwerken → animeert vloeiend
-// via de CSS-transitie op .pc. Korte delay zodat het snappy voelt maar niet schokt.
+// Thumbnail bijwerken: het frame krimpt/groeit mee met de geschaalde logobreedte.
+// De box-breedte animeert vloeiend via de CSS-transitie. Korte delay tegen geschok.
 let thumbTimer;
 function scheduleThumbScale(logo) {
   clearTimeout(thumbTimer);
   thumbTimer = setTimeout(() => {
-    const g = logo.el?.querySelector(".frame-svg .pc");
-    if (g) g.setAttribute("transform", thumbTransform(logo));
-    else renderFrame(logo);
+    renderFrame(logo);
+    applyFrameBox(logo);
+    updateCarouselNav();
   }, 120);
 }
 
@@ -475,33 +475,11 @@ const previewSvg = (logo) => {
     `<g class="pc" transform="${previewTransform(logo)}">${inner}</g></svg>`;
 };
 
-// CARROUSEL-SLOT (WYSIWYG met de export): het slot ís het export-bestand op schaal 1
-// (hoogte = export-hoogte H, breedte = volle content + padding). De content krimpt bij
-// lagere schaal binnen dat vaste slot — dus wat je hier ziet is exact wat je exporteert.
-// Het slot verspringt niet tijdens het schuiven; de extra breedte-marge bij lagere schaal
-// zit niet in de export (die is content-strak, zelfde logo-grootte).
-function thumbGeom(logo) {
-  const H = getHeight();
-  const bb = logo.bb || { x: 0, y: 0, w: logo.natW || 1, h: logo.natH || 1 };
-  const bandH = H - 2 * FRAME_PAD;
-  const contentW1 = (bb.w / bb.h) * bandH; // volle contentbreedte bij schaal 1
-  const SW = Math.round(contentW1 + 2 * FRAME_PAD);
-  const SH = H;
-  const contentH = bandH * logo.scale; // zelfde als de export: (H − 2·pad) · schaal
-  const f = contentH / bb.h;
-  const cw = bb.w * f, ch = bb.h * f;
-  return { SW, SH, tx: SW / 2 - cw / 2 - bb.x * f, ty: SH / 2 - ch / 2 - bb.y * f, f };
-}
-const thumbTransform = (logo) => {
-  const g = thumbGeom(logo);
-  return `translate(${g.tx.toFixed(2)}, ${g.ty.toFixed(2)}) scale(${g.f.toFixed(5)})`;
-};
-const thumbSvg = (logo) => {
-  const { SW, SH } = thumbGeom(logo);
-  const inner = logo.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${SW}" height="${SH}" viewBox="0 0 ${SW} ${SH}" preserveAspectRatio="xMidYMid meet">` +
-    `<g class="pc" transform="${thumbTransform(logo)}">${inner}</g></svg>`;
-};
+// CARROUSEL-THUMBNAIL = de export (framedSvg): strak om het huidige (geschaalde) logo.
+// Zo krimpt óók het frame mee als je een logo kleiner schaalt → smalle frames, andere
+// logo's blijven zichtbaar. De breedte-verandering animeert vloeiend (CSS-transitie op
+// de box-breedte). Volledig WYSIWYG met de export.
+const thumbSvg = (logo) => framedSvg(logo);
 
 function sizeViewport() {
   const availW = viewport.parentElement?.clientWidth || 800;
@@ -542,8 +520,8 @@ function framedSvg(logo) {
   const tx = FRAME_PAD - bb.x * f;
   const ty = (H - targetH) / 2 - bb.y * f;
   const inner = logo.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
-    `<g transform="translate(${tx.toFixed(2)}, ${ty.toFixed(2)}) scale(${f.toFixed(5)})">${inner}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">` +
+    `<g class="pc" transform="translate(${tx.toFixed(2)}, ${ty.toFixed(2)}) scale(${f.toFixed(5)})">${inner}</g></svg>`;
 }
 
 function safeName(name, i) {

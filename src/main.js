@@ -333,8 +333,7 @@ function svgDataUrl(svg) {
 function frameBoxSize(logo) {
   const { SW, SH } = thumbGeom(logo);
   const boxH = 132;
-  const aspect = Math.min(THUMB_MAX_ASPECT, Math.max(0.7, SW / SH));
-  return { boxW: Math.round(boxH * aspect), boxH };
+  return { boxW: Math.round(boxH * (SW / SH)), boxH };
 }
 
 function addFrame(logo) {
@@ -462,19 +461,19 @@ const previewSvg = (logo) => {
     `<g class="pc" transform="${previewTransform(logo)}">${inner}</g></svg>`;
 };
 
-// CARROUSEL-SLOT: breedte per logo VAST op basis van z'n volle breedte (schaal 1), zodat
-// het slot niet verspringt tijdens het schuiven maar de content erbinnen wél schaalt —
-// ook zichtbaar voor brede logo's. Puur preview; niet in de export.
-const THUMB_MAX_ASPECT = 3.4; // extreem brede logo's letterboxen we
+// CARROUSEL-SLOT (WYSIWYG met de export): het slot ís het export-bestand op schaal 1
+// (hoogte = export-hoogte H, breedte = volle content + padding). De content krimpt bij
+// lagere schaal binnen dat vaste slot — dus wat je hier ziet is exact wat je exporteert.
+// Het slot verspringt niet tijdens het schuiven; de extra breedte-marge bij lagere schaal
+// zit niet in de export (die is content-strak, zelfde logo-grootte).
 function thumbGeom(logo) {
   const H = getHeight();
   const bb = logo.bb || { x: 0, y: 0, w: logo.natW || 1, h: logo.natH || 1 };
   const bandH = H - 2 * FRAME_PAD;
   const contentW1 = (bb.w / bb.h) * bandH; // volle contentbreedte bij schaal 1
-  const m = bandH * 0.16; // marge rondom
-  const SW = Math.round(contentW1 + 2 * m);
-  const SH = Math.round(bandH + 2 * m);
-  const contentH = bandH * logo.scale; // huidige schaal → content krimpt binnen het slot
+  const SW = Math.round(contentW1 + 2 * FRAME_PAD);
+  const SH = H;
+  const contentH = bandH * logo.scale; // zelfde als de export: (H − 2·pad) · schaal
   const f = contentH / bb.h;
   const cw = bb.w * f, ch = bb.h * f;
   return { SW, SH, tx: SW / 2 - cw / 2 - bb.x * f, ty: SH / 2 - ch / 2 - bb.y * f, f };

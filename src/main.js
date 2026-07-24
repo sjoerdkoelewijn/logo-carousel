@@ -37,6 +37,7 @@ const colorHex = $("color-hex");
 const smoothing = $("smoothing");
 const canvasH = $("canvas-h");
 const bgColor = $("bg-color");
+const trimPadding = $("trim-padding");
 
 // ---- state ----
 let logos = []; // { id, name, src:ImageData, hasAlpha, svg, natW, natH, scale, el }
@@ -53,6 +54,7 @@ function loadSettings() {
     if (s.canvasH) canvasH.value = s.canvasH;
     if (s.bgColor) bgColor.value = s.bgColor;
     if (s.bg) carouselBg = s.bg;
+    if (s.trim != null) trimPadding.checked = s.trim;
   } catch {}
   setCarouselBg(carouselBg);
   syncLabels();
@@ -60,9 +62,10 @@ function loadSettings() {
 function saveSettings() {
   localStorage.setItem(STORE_KEY, JSON.stringify({
     color: colorHex.value, smoothing: smoothing.value, canvasH: canvasH.value,
-    bg: carouselBg, bgColor: bgColor.value,
+    bg: carouselBg, bgColor: bgColor.value, trim: trimPadding.checked,
   }));
 }
+trimPadding.addEventListener("change", saveSettings);
 
 // Achtergrond van de carrousel-strip (om logo's tegen de bedoelde site-bg te checken).
 function setCarouselBg(bg) {
@@ -564,13 +567,21 @@ function scheduleDetail() {
 }
 
 // ---- export ----
-// Bouw de frame-SVG: hoogte = globaal (H); breedte = content-breedte × schaal + padding.
-// De content wordt op zijn tight bbox geschaald en gecentreerd, met FRAME_PAD rondom.
-function framedSvg(logo) {
+// Bouw de export-SVG. Standaard (trim=false): hoogte = globaal (H), logo op schaal,
+// gecentreerd met FRAME_PAD rondom → gelijke hoogte voor de carrousel. Met trim=true:
+// strak bijgesneden op het logo zelf (geen padding, geen extra hoogte).
+function framedSvg(logo, trim = false) {
   const { W, H, f, targetH, bb } = frameDims(logo);
+  const inner = logo.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
+  if (trim) {
+    const cw = Math.max(1, Math.round(bb.w * f));
+    const ch = Math.max(1, Math.round(bb.h * f));
+    const tx = -bb.x * f, ty = -bb.y * f;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${cw}" height="${ch}" viewBox="0 0 ${cw} ${ch}">` +
+      `<g transform="translate(${tx.toFixed(2)}, ${ty.toFixed(2)}) scale(${f.toFixed(5)})">${inner}</g></svg>`;
+  }
   const tx = FRAME_PAD - bb.x * f;
   const ty = (H - targetH) / 2 - bb.y * f;
-  const inner = logo.svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
     `<g transform="translate(${tx.toFixed(2)}, ${ty.toFixed(2)}) scale(${f.toFixed(5)})">${inner}</g></svg>`;
 }
@@ -583,14 +594,15 @@ function safeName(name, i) {
 $("download-zip").addEventListener("click", async () => {
   if (!logos.length) return;
   const H = getHeight();
+  const trim = trimPadding.checked;
   setStatus("Creating ZIP…");
   try {
     const enc = new TextEncoder();
     const entries = logos.map((logo, i) => ({
       name: safeName(logo.name, i) + ".svg",
-      data: enc.encode(framedSvg(logo)),
+      data: enc.encode(framedSvg(logo, trim)),
     }));
-    downloadBlob(makeZip(entries), `logos-h${H}.zip`);
+    downloadBlob(makeZip(entries), trim ? "logos-trimmed.zip" : `logos-h${H}.zip`);
     setStatus("");
   } catch (err) {
     console.error(err);

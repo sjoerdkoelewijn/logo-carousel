@@ -101,12 +101,12 @@
         <!-- Export -->
         <div class="actions">
           <button id="download-zip" class="btn btn-primary">Download all (ZIP)</button>
-          <label class="check" title="Export each SVG cropped tight to the logo, without the fixed-height frame or padding">
-            <input type="checkbox" id="trim-padding" /> Trim padding
+          <label class="check" title="Also add a tightly cropped SVG per logo (named …_no_padding.svg) next to the padded one — 2 files per logo">
+            <input type="checkbox" id="trim-padding" /> Include versions without padding
           </label>
-          <button id="add-more-btn" class="btn">Add logos</button>
-          <button id="reset-btn" class="btn btn-ghost">Clear all</button>
           <span id="status" class="status" aria-live="polite"></span>
+          <button id="add-more-btn" class="btn push-right">Add logos</button>
+          <button id="reset-btn" class="btn btn-ghost">Clear all</button>
         </div>
       </section>
     </main>

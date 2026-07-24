@@ -484,6 +484,7 @@
     cursor: pointer;
   }
   .check:hover { color: var(--text); }
+  .push-right { margin-left: auto; }
 }
 
 /* ------------------------------------------------------------------ */

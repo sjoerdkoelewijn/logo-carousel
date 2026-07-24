@@ -594,15 +594,18 @@ function safeName(name, i) {
 $("download-zip").addEventListener("click", async () => {
   if (!logos.length) return;
   const H = getHeight();
-  const trim = trimPadding.checked;
+  const includeNoPad = trimPadding.checked;
   setStatus("Creating ZIP…");
   try {
     const enc = new TextEncoder();
-    const entries = logos.map((logo, i) => ({
-      name: safeName(logo.name, i) + ".svg",
-      data: enc.encode(framedSvg(logo, trim)),
-    }));
-    downloadBlob(makeZip(entries), trim ? "logos-trimmed.zip" : `logos-h${H}.zip`);
+    const entries = [];
+    logos.forEach((logo, i) => {
+      const base = safeName(logo.name, i);
+      entries.push({ name: base + ".svg", data: enc.encode(framedSvg(logo, false)) });
+      if (includeNoPad)
+        entries.push({ name: base + "_no_padding.svg", data: enc.encode(framedSvg(logo, true)) });
+    });
+    downloadBlob(makeZip(entries), `logos-h${H}.zip`);
     setStatus("");
   } catch (err) {
     console.error(err);
